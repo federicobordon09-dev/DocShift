@@ -65,6 +65,7 @@ export default function UploadPage() {
 
     setError("");
     setStep("uploading");
+    setPdfUrl(null);
 
     try {
       const formData = new FormData();
@@ -79,8 +80,19 @@ export default function UploadPage() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Error desconocido");
+        // Manejo de error para JSON o HTML
+        let errorMessage = "Error desconocido";
+
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          errorMessage = data.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = text || errorMessage;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const blob = await response.blob();
@@ -111,9 +123,7 @@ export default function UploadPage() {
     setStep("idle");
     setProgress(0);
     setPdfBlob(null);
-    if (pdfUrl) {
-      window.URL.revokeObjectURL(pdfUrl);
-    }
+    if (pdfUrl) window.URL.revokeObjectURL(pdfUrl);
     setPdfUrl(null);
     setError("");
   }
@@ -162,21 +172,13 @@ export default function UploadPage() {
               >
                 {!file ? (
                   <>
-                    <p className="text-gray-600 mb-2">
-                      Arrastrá tu archivo acá
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      o hacé click para seleccionarlo
-                    </p>
+                    <p className="text-gray-600 mb-2">Arrastrá tu archivo acá</p>
+                    <p className="text-sm text-gray-400">o hacé click para seleccionarlo</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-gray-800 font-medium">
-                      {file.name}
-                    </p>
-                    <p className="text-sm text-gray-400 mt-2">
-                      Archivo listo para convertir
-                    </p>
+                    <p className="text-gray-800 font-medium">{file.name}</p>
+                    <p className="text-sm text-gray-400 mt-2">Archivo listo para convertir</p>
                   </>
                 )}
 
