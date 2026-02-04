@@ -1,30 +1,31 @@
-# Usamos Node 22 slim como base
+# Base ligera de Node
 FROM node:22-slim
 
-# Instalamos dependencias del sistema y LibreOffice
-RUN apt-get update && apt-get install -y \
-    libreoffice \
-    libreoffice-writer \
-    fonts-dejavu-core \
+# Instalar LibreOffice y dependencias mínimas
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      libreoffice \
+      libreoffice-writer \
+      fonts-dejavu-core \
+      curl \
+      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Creamos el directorio de la app
+# Directorio de la app
 WORKDIR /app
 
-# Copiamos package.json y package-lock.json
+# Copiar y instalar dependencias
 COPY package*.json ./
+RUN npm install --production
 
-# Instalamos dependencias de Node
-RUN npm install
-
-# Copiamos todo el código de la app
+# Copiar todo el código
 COPY . .
 
-# Ejecutamos build si lo necesitas (por ejemplo Next.js)
+# Build de Next.js
 RUN npm run build
 
-# Exponemos el puerto que usará Render
+# Puerto que usará Render
 EXPOSE 10000
 
-# Comando para iniciar tu app
+# Comando para iniciar la app
 CMD ["npm", "start"]
