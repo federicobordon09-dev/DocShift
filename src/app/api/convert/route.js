@@ -3,14 +3,12 @@ import path from "path";
 import { exec } from "child_process";
 import { randomUUID } from "crypto";
 
-const TMP_DIR = path.join(process.cwd(), "tmp");
+const TMP_DIR = "/tmp"; // Usar directorio temporal de Render
 const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
 const OUTPUT_DIR = path.join(TMP_DIR, "output");
 const DEFAULT_SOFFICE_CANDIDATES = [
   process.env.LIBREOFFICE_PATH,
-  "/usr/bin/soffice",
-  "/usr/lib/libreoffice/program/soffice",
-  "/usr/local/bin/soffice",
+  "/usr/bin/soffice", // path típico en Render
 ].filter(Boolean);
 
 const resolveSofficePath = async () => {
@@ -19,7 +17,7 @@ const resolveSofficePath = async () => {
       await fs.access(candidate);
       return candidate;
     } catch (error) {
-      // Ignore missing candidates and try the next one.
+      // Ignorar
     }
   }
   return null;
@@ -33,41 +31,31 @@ export const POST = async (req) => {
     const formData = await req.formData();
     const file = formData.get("file");
 
-    if (!file) {
-      return new Response(JSON.stringify({ error: "No se recibió ningún archivo" }), { status: 400 });
-    }
+    if (!file) return new Response(JSON.stringify({ error: "No se recibió ningún archivo" }), { status: 400 });
 
     const filename = file.name;
     const extension = path.extname(filename).toLowerCase();
-
-    if (extension !== ".docx" && extension !== ".doc") {
+    if (![".docx", ".doc"].includes(extension))
       return new Response(JSON.stringify({ error: "Solo se permiten archivos Word (.docx, .doc)" }), { status: 422 });
-    }
 
     const uniqueName = `${randomUUID()}${extension}`;
     const inputPath = path.join(UPLOADS_DIR, uniqueName);
     const outputPath = path.join(OUTPUT_DIR, uniqueName.replace(extension, ".pdf"));
 
     // Guardar archivo
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(inputPath, buffer);
+    await fs.writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
 
-    // Comando Linux
+    // Verificar LibreOffice
     const sofficePath = await resolveSofficePath();
-
-    if (!sofficePath) {
+    if (!sofficePath)
       return new Response(
-        JSON.stringify({
-          error:
-            "No se encontró LibreOffice (soffice). Configurá la ruta con LIBREOFFICE_PATH o instalalo en el servidor.",
-        }),
+        JSON.stringify({ error: "No se encontró LibreOffice (soffice). Instalalo en el servidor." }),
         { status: 500 }
       );
-    }
 
+    // Comando de conversión
     const libreCmd = `"${sofficePath}" --headless --nologo --nofirststartwizard --convert-to pdf "${inputPath}" --outdir "${OUTPUT_DIR}"`;
 
-    // Ejecutar LibreOffice
     await new Promise((resolve, reject) => {
       exec(libreCmd, (err, stdout, stderr) => {
         if (err) {
@@ -79,7 +67,6 @@ export const POST = async (req) => {
       });
     });
 
-    // Leer PDF generado
     const pdfBuffer = await fs.readFile(outputPath);
 
     // Limpiar archivos temporales
