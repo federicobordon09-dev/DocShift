@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { exec } from "child_process";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from "crypto";
 
 const TMP_DIR = path.join(process.cwd(), "tmp");
 const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
@@ -26,7 +26,7 @@ export const POST = async (req) => {
       return new Response(JSON.stringify({ error: "Solo se permiten archivos Word (.docx, .doc)" }), { status: 422 });
     }
 
-    const uniqueName = uuidv4() + extension;
+    const uniqueName = `${randomUUID()}${extension}`;
     const inputPath = path.join(UPLOADS_DIR, uniqueName);
     const outputPath = path.join(OUTPUT_DIR, uniqueName.replace(extension, ".pdf"));
 
