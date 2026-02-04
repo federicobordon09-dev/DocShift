@@ -3,28 +3,33 @@ import path from "path";
 import { exec } from "child_process";
 import { randomUUID } from "crypto";
 
-const TMP_DIR = "/tmp"; // Usar directorio temporal de Render
+const TMP_DIR = "/tmp"; // Directorio temporal seguro en Render
 const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
 const OUTPUT_DIR = path.join(TMP_DIR, "output");
-const DEFAULT_SOFFICE_CANDIDATES = [
-  process.env.LIBREOFFICE_PATH,
-  "/usr/bin/soffice", // path típico en Render
-].filter(Boolean);
 
-const resolveSofficePath = async () => {
-  for (const candidate of DEFAULT_SOFFICE_CANDIDATES) {
-    try {
-      await fs.access(candidate);
-      return candidate;
-    } catch (error) {
-      // Ignorar
-    }
-  }
-  return null;
+// En Docker con LibreOffice instalado, soffice siempre estará aquí
+const SOFFICE_PATH = "/usr/bin/soffice";
+
+// Función para convertir Word a PDF
+const convertToPdf = (inputPath, outputDir) => {
+  return new Promise((resolve, reject) => {
+    const cmd = `"${SOFFICE_PATH}" --headless --nologo --nofirststartwizard --convert-to pdf "${inputPath}" --outdir "${outputDir}"`;
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error("LibreOffice STDOUT:", stdout);
+        console.error("LibreOffice STDERR:", stderr);
+        return reject(new Error("LibreOffice no pudo procesar el archivo. Verificá que sea un Word válido."));
+      }
+      resolve();
+    });
+  });
 };
 
 export const POST = async (req) => {
+  let inputPath, outputPath;
+
   try {
+    // Crear directorios temporales
     await fs.mkdir(UPLOADS_DIR, { recursive: true });
     await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
@@ -39,39 +44,27 @@ export const POST = async (req) => {
       return new Response(JSON.stringify({ error: "Solo se permiten archivos Word (.docx, .doc)" }), { status: 422 });
 
     const uniqueName = `${randomUUID()}${extension}`;
-    const inputPath = path.join(UPLOADS_DIR, uniqueName);
-    const outputPath = path.join(OUTPUT_DIR, uniqueName.replace(extension, ".pdf"));
+    inputPath = path.join(UPLOADS_DIR, uniqueName);
+    outputPath = path.join(OUTPUT_DIR, uniqueName.replace(extension, ".pdf"));
 
-    // Guardar archivo
+    // Guardar archivo temporal
     await fs.writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
 
     // Verificar LibreOffice
-    const sofficePath = await resolveSofficePath();
-    if (!sofficePath)
+    try {
+      await fs.access(SOFFICE_PATH);
+    } catch {
       return new Response(
         JSON.stringify({ error: "No se encontró LibreOffice (soffice). Instalalo en el servidor." }),
         { status: 500 }
       );
+    }
 
-    // Comando de conversión
-    const libreCmd = `"${sofficePath}" --headless --nologo --nofirststartwizard --convert-to pdf "${inputPath}" --outdir "${OUTPUT_DIR}"`;
+    // Convertir a PDF
+    await convertToPdf(inputPath, OUTPUT_DIR);
 
-    await new Promise((resolve, reject) => {
-      exec(libreCmd, (err, stdout, stderr) => {
-        if (err) {
-          console.error("LibreOffice STDOUT:", stdout);
-          console.error("LibreOffice STDERR:", stderr);
-          return reject(new Error("LibreOffice no pudo procesar el archivo. Verificá que sea un Word válido."));
-        }
-        resolve();
-      });
-    });
-
+    // Leer PDF generado
     const pdfBuffer = await fs.readFile(outputPath);
-
-    // Limpiar archivos temporales
-    await fs.unlink(inputPath);
-    await fs.unlink(outputPath);
 
     return new Response(pdfBuffer, {
       status: 200,
@@ -83,5 +76,9 @@ export const POST = async (req) => {
   } catch (err) {
     console.error("Error en conversión:", err);
     return new Response(JSON.stringify({ error: err.message || "Error desconocido en la conversión" }), { status: 422 });
+  } finally {
+    // Limpiar archivos temporales aunque haya error
+    if (inputPath) await fs.rm(inputPath, { force: true }).catch(() => {});
+    if (outputPath) await fs.rm(outputPath, { force: true }).catch(() => {});
   }
 };
