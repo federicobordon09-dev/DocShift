@@ -6,6 +6,24 @@ import { randomUUID } from "crypto";
 const TMP_DIR = path.join(process.cwd(), "tmp");
 const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
 const OUTPUT_DIR = path.join(TMP_DIR, "output");
+const DEFAULT_SOFFICE_CANDIDATES = [
+  process.env.LIBREOFFICE_PATH,
+  "/usr/bin/soffice",
+  "/usr/lib/libreoffice/program/soffice",
+  "/usr/local/bin/soffice",
+].filter(Boolean);
+
+const resolveSofficePath = async () => {
+  for (const candidate of DEFAULT_SOFFICE_CANDIDATES) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch (error) {
+      // Ignore missing candidates and try the next one.
+    }
+  }
+  return null;
+};
 
 export const POST = async (req) => {
   try {
@@ -35,7 +53,19 @@ export const POST = async (req) => {
     await fs.writeFile(inputPath, buffer);
 
     // Comando Linux
-    const libreCmd = `soffice --headless --nologo --nofirststartwizard --convert-to pdf "${inputPath}" --outdir "${OUTPUT_DIR}"`;
+    const sofficePath = await resolveSofficePath();
+
+    if (!sofficePath) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No se encontró LibreOffice (soffice). Configurá la ruta con LIBREOFFICE_PATH o instalalo en el servidor.",
+        }),
+        { status: 500 }
+      );
+    }
+
+    const libreCmd = `"${sofficePath}" --headless --nologo --nofirststartwizard --convert-to pdf "${inputPath}" --outdir "${OUTPUT_DIR}"`;
 
     // Ejecutar LibreOffice
     await new Promise((resolve, reject) => {
