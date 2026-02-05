@@ -12,14 +12,24 @@ export default function UploadPage() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [showToast, setShowToast] = useState(false);
 
-  // --- Lógica de Archivos ---
+  // --- Lógica de Archivos con Validación de Tamaño ---
   function handleFile(selectedFile) {
     if (!selectedFile) return;
+
+    // Límite de 5MB para evitar que Render se quede sin RAM
+    const MAX_SIZE = 5 * 1024 * 1024; 
+    if (selectedFile.size > MAX_SIZE) {
+      setError("El archivo es demasiado grande (máximo 5MB)");
+      setFile(null);
+      return;
+    }
+
     if (!selectedFile.name.endsWith(".docx") && !selectedFile.name.endsWith(".doc")) {
       setError("Solo se permiten archivos Word (.docx, .doc)");
       setFile(null);
       return;
     }
+
     setError("");
     setFile(selectedFile);
   }
@@ -72,7 +82,7 @@ export default function UploadPage() {
       setShowToast(true);
       setTimeout(() => setShowToast(false), 4000);
     } catch (err) {
-      setError("No se pudo convertir el archivo. Revisa que sea un Word válido.");
+      setError("No se pudo convertir el archivo. Puede que sea demasiado complejo o el servidor esté ocupado.");
       setStep("idle");
     }
   }
@@ -114,10 +124,9 @@ export default function UploadPage() {
             <motion.div key="upload" exit={{ opacity: 0, scale: 0.95 }}>
               <div className="text-center mb-10">
                 <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Prepara tu Word</h2>
-                <p className="text-slate-500 dark:text-slate-400 font-medium">Formatos soportados: .docx y .doc</p>
+                <p className="text-slate-500 dark:text-slate-400 font-medium">Máximo 5MB • Formatos .docx y .doc</p>
               </div>
 
-              {/* DROPZONE CORREGIDO */}
               <div
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
@@ -141,10 +150,8 @@ export default function UploadPage() {
                 </div>
               </div>
 
-              {/* ERRORES */}
               {error && <p className="mt-4 text-center text-red-500 text-sm font-semibold">{error}</p>}
 
-              {/* PROGRESS BAR */}
               {(step === "uploading" || step === "converting") && (
                 <div className="mt-8">
                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-2">
@@ -168,7 +175,6 @@ export default function UploadPage() {
               </button>
             </motion.div>
           ) : (
-            /* VISTA FINAL */
             <motion.div key="done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
               <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>

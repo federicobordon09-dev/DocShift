@@ -77,6 +77,7 @@ export default function Home() {
           </div>
         </div>
 
+
         <footer className="mt-32 pt-8 border-t border-slate-100 dark:border-slate-800 text-center text-slate-400 text-sm">
           <p>© {new Date().getFullYear()} DocShift. Tu privacidad es nuestra prioridad.</p>
         </footer>

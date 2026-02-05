@@ -15,7 +15,6 @@ const SOFFICE_PATH = getSofficePath();
 
 export const POST = async (req) => {
   const requestId = randomUUID();
-  // Usamos la carpeta temporal del sistema operativo para evitar líos de permisos
   const workDir = path.join(os.tmpdir(), `docshift-${requestId}`);
 
   try {
@@ -27,10 +26,22 @@ export const POST = async (req) => {
     
     await fs.writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
 
-    // Ejecutar conversión
+    // Ejecutar conversión con Timeout de 30 segundos
     await new Promise((resolve, reject) => {
       const cmd = `${SOFFICE_PATH} --headless --convert-to pdf "${inputPath}" --outdir "${workDir}"`;
-      exec(cmd, (err) => (err ? reject(err) : resolve()));
+      
+      const childProcess = exec(cmd, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+
+      // Si tarda más de 30 seg, cancelamos para no saturar Render
+      const timeout = setTimeout(() => {
+        childProcess.kill();
+        reject(new Error("La conversión tardó demasiado tiempo."));
+      }, 30000);
+
+      childProcess.on('exit', () => clearTimeout(timeout));
     });
 
     const outputPath = path.join(workDir, "document.pdf");
@@ -42,11 +53,9 @@ export const POST = async (req) => {
     });
 
   } catch (err) {
-    console.error("--- ERROR EN EL SERVIDOR ---");
-    console.error(err); // ESTO ES LO QUE DEBES MIRAR EN TU TERMINAL
-    return new Response(JSON.stringify({ error: "Fallo en el servidor" }), { status: 500 });
+    console.error("--- ERROR EN EL SERVIDOR ---", err);
+    return new Response(JSON.stringify({ error: "Fallo en la conversión" }), { status: 500 });
   } finally {
-    // Intentar borrar carpeta, pero no romper si falla
     fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
 };
